@@ -44,6 +44,15 @@ docker compose build openclaw-gateway
 ONBOARDED=$(docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
   -e "try{require('fs').accessSync('/home/node/.openclaw/.onboarded');console.log('yes')}catch{console.log('no')}" 2>/dev/null | tail -n1 || echo no)
 if [[ "$ONBOARDED" != "yes" ]]; then
+  # Baking the AC2 plugin install into the image (Dockerfile) auto-adds it to
+  # plugins.allow, turning that array into a restrictive allowlist. Left in
+  # place, it blocks onboarding from enabling any other plugin — including
+  # the built-in model-provider plugins (e.g. Gemini) — with "<provider>
+  # plugin is disabled (blocked by allowlist)". Clear it before onboarding
+  # runs so provider selection isn't blocked; AC2 stays enabled via its own
+  # plugins.entries record.
+  docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
+    dist/index.js config unset plugins.allow || true
   echo "==> Running OpenClaw onboarding (interactive)"
   docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
     dist/index.js onboard --mode local --no-install-daemon || {

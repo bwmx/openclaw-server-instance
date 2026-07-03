@@ -19,7 +19,6 @@ services:
     restart: unless-stopped
     environment:
       HOME: /home/node
-      OPENCLAW_HOME: /home/node/.openclaw
       OPENCLAW_DISABLE_BONJOUR: "1"
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set in .env}
       AC2_LIQUID_AUTH_SERVER: ${AC2_LIQUID_AUTH_SERVER:-}
@@ -60,7 +59,6 @@ services:
     network_mode: "service:openclaw-gateway"
     environment:
       HOME: /home/node
-      OPENCLAW_HOME: /home/node/.openclaw
       OPENCLAW_ENTRY: /app/dist/index.js
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set in .env}
       AC2_LIQUID_AUTH_SERVER: ${AC2_LIQUID_AUTH_SERVER:-}

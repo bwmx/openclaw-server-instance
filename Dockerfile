@@ -12,20 +12,20 @@ FROM ${OPENCLAW_IMAGE}
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential \
-      cmake \
-      pkg-config \
-      python3 \
-      libnice-dev \
-      dbus \
-      dbus-x11 \
-      gnome-keyring \
-      libsecret-1-0 \
+    build-essential \
+    cmake \
+    pkg-config \
+    python3 \
+    libnice-dev \
+    libssl-dev \
+    dbus \
+    dbus-x11 \
+    gnome-keyring \
+    libsecret-1-0 \
     && rm -rf /var/lib/apt/lists/*
 
 USER node
 ENV HOME=/home/node
-ENV OPENCLAW_HOME=/home/node/.openclaw
 
 ARG AC2_PLUGIN_SPEC=npm:@algorandfoundation/ac2-open-claw-reference@1.0.0-canary.3
 
@@ -37,9 +37,11 @@ RUN node /app/dist/index.js plugins install "${AC2_PLUGIN_SPEC}"
 #    - node-datachannel: from source against libnice (USE_NICE=1) so TURN over
 #      TCP and TURNs work (prebuilt binary uses libjuice, UDP-only for TURN)
 RUN set -eux; \
-    PLUGIN_DIR="$(ls -d "${OPENCLAW_HOME}"/npm/projects/algorandfoundation-ac2-open-claw-reference-* | head -n1)"; \
+    PLUGIN_DIR="$(find "${HOME}/.openclaw/npm/projects" -maxdepth 1 -mindepth 1 -type d \( -name 'algorandfoundation-ac2-open-claw-reference-*' -o -name '@algorandfoundation+ac2-open-claw-reference*' -o -name 'ac2-open-claw-reference*' \) | head -n1)"; \
+    test -n "$PLUGIN_DIR"; \
     npm rebuild --prefix "$PLUGIN_DIR" @napi-rs/keyring; \
     NDC="$PLUGIN_DIR/node_modules/node-datachannel"; \
+    test -d "$NDC"; \
     cd "$NDC"; \
     npm install --ignore-scripts --production=false; \
     npx cmake-js clean; \
@@ -52,7 +54,7 @@ RUN set -eux; \
 #    This config (plus the installed plugin tree) lives in the image's
 #    /home/node/.openclaw and seeds the named Docker volume on first run.
 RUN node /app/dist/index.js plugins enable ac2-open-claw-reference \
- && node /app/dist/index.js ac2 setup
+    && node /app/dist/index.js ac2 setup
 
 # 4) Pair-manager HTTP service.
 COPY --chown=node:node pair-manager /app/pair-manager
