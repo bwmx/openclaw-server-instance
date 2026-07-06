@@ -4,13 +4,16 @@
 #   openclaw-gateway — the OpenClaw gateway (NOT published publicly; loopback only)
 #   pair-manager     — token-protected QR page driving `openclaw ac2 pair`
 #                      (shares the gateway's network namespace; reachable
-#                      internally at openclaw-gateway:8377, not published to
-#                      the host)
+#                      internally at openclaw-gateway:8377 and on the host
+#                      at 127.0.0.1:8377)
 #   caddy            — TLS-terminating reverse proxy (self-signed cert),
 #                      fronted by Cloudflare in "Full" SSL mode
+#                      OPTIONAL: only started when DOMAIN is set.
+#                      Start with: docker compose --profile caddy up -d
 #
-# Public surface: ONLY 80/443 (caddy). The pair page itself stays
-# token-protected behind that.
+# With caddy:    public surface is 80/443; pair page behind TLS + token.
+# Without caddy: pair page is on http://localhost:8377 (loopback + token);
+#                use an SSH tunnel for remote access.
 
 services:
   openclaw-gateway:
@@ -37,6 +40,11 @@ services:
     ports:
       # Gateway/Control UI: host loopback only. Reach it via SSH tunnel.
       - "127.0.0.1:18789:18789"
+      # Pair page: loopback only. Accessible directly when running without
+      # caddy; caddy proxies to it internally (openclaw-gateway:8377) when
+      # the caddy profile is active. pair-manager shares this network
+      # namespace, so the port lives here.
+      - "127.0.0.1:8377:8377"
     tmpfs:
       - /tmp:size=256m
     healthcheck:
@@ -93,13 +101,14 @@ services:
     cpus: "1.0"
 
   caddy:
+    profiles: ["caddy"]
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       pair-manager:
         condition: service_healthy
     environment:
-      DOMAIN: ${DOMAIN:?set in .env}
+      DOMAIN: ${DOMAIN:-}
     ports:
       - "80:80"
       - "443:443"

@@ -107,19 +107,35 @@ docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
 
 # --- 4. start ---------------------------------------------------------------
 echo "==> Starting stack"
-docker compose up -d
+if [[ -n "${DOMAIN:-}" ]]; then
+  docker compose --profile caddy up -d
+else
+  docker compose up -d
+fi
 
 echo
 echo "============================================================"
-echo " Pairing page:"
-echo "   https://${DOMAIN:?set in .env}/?token=${PAIR_TOKEN}"
-echo
-echo " Open it, press 'Start pairing session', scan the QR."
-echo " Sessions auto-expire after $(( ${PAIR_SESSION_TTL_MS:-900000} / 60000 )) minutes."
-echo
-echo " Firewall reminder (ufw):"
-echo "   sudo ufw allow 80/tcp"
-echo "   sudo ufw allow 443/tcp"
-echo
-echo " Cloudflare reminder: DNS record proxied (orange cloud), SSL/TLS mode = Full."
+if [[ -n "${DOMAIN:-}" ]]; then
+  echo " Pairing page:"
+  echo "   https://${DOMAIN}/?token=${PAIR_TOKEN}"
+  echo
+  echo " Open it, press 'Start pairing session', scan the QR."
+  echo " Sessions auto-expire after $(( ${PAIR_SESSION_TTL_MS:-900000} / 60000 )) minutes."
+  echo
+  echo " Firewall reminder (ufw):"
+  echo "   sudo ufw allow 80/tcp"
+  echo "   sudo ufw allow 443/tcp"
+  echo
+  echo " Cloudflare reminder: DNS record proxied (orange cloud), SSL/TLS mode = Full."
+else
+  echo " Pairing page (local / no TLS):"
+  echo "   http://localhost:8377/?token=${PAIR_TOKEN}"
+  echo
+  echo " Open it, press 'Start pairing session', scan the QR."
+  echo " Sessions auto-expire after $(( ${PAIR_SESSION_TTL_MS:-900000} / 60000 )) minutes."
+  echo
+  echo " For remote access, SSH-tunnel the port first:"
+  echo "   ssh -L 8377:localhost:8377 <user>@<server>"
+  echo " then open http://localhost:8377/?token=${PAIR_TOKEN}"
+fi
 echo "============================================================"
