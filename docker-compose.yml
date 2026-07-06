@@ -26,6 +26,7 @@ services:
       OPENCLAW_DISABLE_BONJOUR: "1"
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set in .env}
       AC2_LIQUID_AUTH_SERVER: ${AC2_LIQUID_AUTH_SERVER:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     volumes:
       - openclaw_data:/home/node/.openclaw
     expose:

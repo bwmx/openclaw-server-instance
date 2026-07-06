@@ -56,10 +56,24 @@ Notes on why it's built this way:
 # on the server
 git clone <this repo> openclaw-server && cd openclaw-server   # or scp the folder
 chmod +x scripts/setup.sh pair-manager/entry.sh
+```
+
+Edit `.env` and set at minimum:
+
+| Variable | Description |
+|---|---|
+| `DOMAIN` | Your Cloudflare-proxied hostname (e.g. `pair.example.com`) |
+| `GOOGLE_API_KEY` | Google AI (Gemini) API key — get one at [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+
+All other values (`OPENCLAW_GATEWAY_TOKEN`, `PAIR_TOKEN`) are generated automatically by the setup script when `.env` doesn't already contain them.
+
+```bash
 ./scripts/setup.sh
 ```
 
-The script generates `.env` (gateway token + pairing-page token), builds the image, runs interactive OpenClaw onboarding (pick provider, paste API key), verifies the AC2 wiring (`plugins enable` + `ac2 setup`), and starts the stack. It prints the pairing URL at the end:
+When `GOOGLE_API_KEY` is set the script configures OpenClaw non-interactively — no onboarding walkthrough required. If `GOOGLE_API_KEY` is left blank, the traditional interactive onboarding runs instead (you will be prompted to choose a provider and paste an API key).
+
+The script builds the image, applies config, verifies the AC2 wiring (`plugins enable` + `ac2 setup`), and starts the stack. It prints the pairing URL at the end:
 
 ```
 https://<DOMAIN>/?token=<PAIR_TOKEN>
