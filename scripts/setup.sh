@@ -87,6 +87,17 @@ docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
 # --- 3b. Google provider config (always applied; idempotent) ----------------
 # Runs on every setup.sh invocation so changes to GOOGLE_API_KEY or
 # GOOGLE_MODEL in .env are picked up without resetting the .onboarded marker.
+#
+# Config paths follow the OpenClaw model-catalog schema:
+#   - models.providers.google.apiKey  — merges onto the built-in "google"
+#     provider entry (catalog mode is "merge" by default, so baseUrl/api/model
+#     list from the built-in catalog are preserved).
+#   - agents.defaults.model           — selects the default model in
+#     "<provider>/<model>" form, e.g. "google/gemini-2.5-pro". GOOGLE_MODEL in
+#     .env is the bare model id; the "google/" prefix is added here.
+# Written via `config set --batch-json`, which validates against the live schema
+# before writing. This step is non-fatal: if a future image changes the schema,
+# it warns and continues instead of aborting the whole setup.
 if [[ -n "${GOOGLE_API_KEY:-}" ]]; then
   echo "==> Applying Google provider config"
   docker compose run --rm --no-deps \
@@ -94,9 +105,10 @@ if [[ -n "${GOOGLE_API_KEY:-}" ]]; then
     -e GOOGLE_MODEL="${GOOGLE_MODEL:-}" \
     --entrypoint node openclaw-gateway \
     -e "const cp=require('child_process');
-        const cfg=[{path:'providers.google.apiKey',value:process.env.GOOGLE_API_KEY}];
-        if(process.env.GOOGLE_MODEL) cfg.push({path:'providers.google.model',value:process.env.GOOGLE_MODEL});
-        cp.execFileSync('node',['/app/dist/index.js','config','set','--batch-json',JSON.stringify(cfg)],{stdio:'inherit'})"
+        const cfg=[{path:'models.providers.google.apiKey',value:process.env.GOOGLE_API_KEY}];
+        if(process.env.GOOGLE_MODEL) cfg.push({path:'agents.defaults.model',value:'google/'+process.env.GOOGLE_MODEL});
+        cp.execFileSync('node',['/app/dist/index.js','config','set','--batch-json',JSON.stringify(cfg)],{stdio:'inherit'})" \
+    || echo "WARNING: Google provider config failed (schema mismatch?). Continuing; configure the provider via 'config set' or onboarding if the gateway can't reach a model."
 fi
 
 echo "==> Verifying AC2 plugin wiring"
