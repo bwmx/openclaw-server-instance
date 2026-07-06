@@ -80,15 +80,17 @@ docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
 echo "==> Starting stack"
 docker compose up -d
 
-IP=$(curl -fsS -4 --max-time 5 https://ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
 echo
 echo "============================================================"
 echo " Pairing page:"
-echo "   http://${IP}:${PAIR_PUBLIC_PORT:-8377}/?token=${PAIR_TOKEN}"
+echo "   https://${DOMAIN:?set in .env}/?token=${PAIR_TOKEN}"
 echo
 echo " Open it, press 'Start pairing session', scan the QR."
 echo " Sessions auto-expire after $(( ${PAIR_SESSION_TTL_MS:-900000} / 60000 )) minutes."
 echo
 echo " Firewall reminder (ufw):"
-echo "   sudo ufw allow ${PAIR_PUBLIC_PORT:-8377}/tcp"
+echo "   sudo ufw allow 80/tcp"
+echo "   sudo ufw allow 443/tcp"
+echo
+echo " Cloudflare reminder: DNS record proxied (orange cloud), SSL/TLS mode = Full."
 echo "============================================================"

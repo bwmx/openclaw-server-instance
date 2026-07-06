@@ -7,9 +7,14 @@ Publicly accessible OpenClaw instance on Ubuntu with the Algorand Foundation **A
 ```
                           public internet
                                 │
-                     :8377 (only public port)
+                    Cloudflare (proxied, SSL/TLS: Full)
+                                │
+                          :443 / :80
                                 │
 ┌── docker ──────────────────────────────────────────────┐
+│  caddy                                                   │
+│  self-signed cert (`tls internal`) ─┐                    │
+│                                     ▼                    │
 │  openclaw-gateway            pair-manager               │
 │  node dist/index.js gateway  (same network namespace)   │
 │  :18789 (loopback-published) ├─ HTTP :8377 QR page      │
@@ -25,10 +30,11 @@ Publicly accessible OpenClaw instance on Ubuntu with the Algorand Foundation **A
 
 Notes on why it's built this way:
 
-- **AC2 traffic is outbound.** Pairing and chat run over Liquid Auth signaling + WebRTC (TURN over TCP/TLS thanks to the libnice build), so the only inbound public port needed is the QR page itself.
+- **AC2 traffic is outbound.** Pairing and chat run over Liquid Auth signaling + WebRTC (TURN over TCP/TLS thanks to the libnice build), so the only inbound public ports needed are for the QR page itself.
+- **Cloudflare sits in front, proxied.** The A record is orange-clouded, so only Cloudflare's proxied port list works — the pair page is fronted by Caddy on 80/443 instead of being exposed directly on a nonstandard port. Caddy terminates TLS with a self-signed cert (`tls internal`); Cloudflare's SSL/TLS mode must be set to **Full** (not Flexible — that would send the pairing token to the origin in cleartext; not Full strict — that requires a CA-signed origin cert, which this setup deliberately avoids in favor of a self-signed one).
 - **The pairing session lives in the `ac2 pair` process.** The pair-manager keeps that child process alive for the TTL and terminates it afterwards; `ac2 forget` resets to a fresh state.
 - **The plugin is baked into the image** at build time (install + native rebuilds per the plugin README: `@napi-rs/keyring` via prebuild, `node-datachannel` compiled from source with `USE_NICE=1` against libnice). The named volume `openclaw_data` is seeded from the image on first run, so plugin files and wiring persist.
-- **Hardening:** both containers run as non-root `node`, `cap_drop: ALL`, `no-new-privileges`, pids/memory/CPU limits, tmpfs `/tmp`. The gateway port 18789 is published on host loopback only. The pairing page requires a secret token and auto-expires sessions.
+- **Hardening:** the gateway/pair-manager containers run as non-root `node`; all three containers use `cap_drop: ALL` (caddy adds back only `NET_BIND_SERVICE`, needed to bind 80/443), `no-new-privileges`, and pids/memory/CPU limits, with tmpfs `/tmp` on the node containers. The gateway port 18789 is published on host loopback only, and the pair page is not published to the host at all — only reachable through caddy. The pairing page requires a secret token and auto-expires sessions.
 
 ## Prerequisites
 
@@ -36,6 +42,13 @@ Notes on why it's built this way:
 - Docker Engine + Compose v2 (`curl -fsSL https://get.docker.com | sh`)
 - ≥ 2 GB RAM (image build compiles native code)
 - An API key for your model provider (asked during onboarding)
+- A domain with a Cloudflare-proxied A record pointed at the server's IP
+
+## Cloudflare setup
+
+1. DNS record for your domain: type `A`, value = server's public IP, proxy status **Proxied** (orange cloud).
+2. SSL/TLS → Overview → encryption mode: **Full** (not Flexible, not Full strict — Caddy serves a self-signed cert, which Full accepts without CA validation).
+3. Set `DOMAIN=` in `.env` to that hostname before running setup.
 
 ## Deploy
 
@@ -49,13 +62,14 @@ chmod +x scripts/setup.sh pair-manager/entry.sh
 The script generates `.env` (gateway token + pairing-page token), builds the image, runs interactive OpenClaw onboarding (pick provider, paste API key), verifies the AC2 wiring (`plugins enable` + `ac2 setup`), and starts the stack. It prints the pairing URL at the end:
 
 ```
-http://<server-ip>:8377/?token=<PAIR_TOKEN>
+https://<DOMAIN>/?token=<PAIR_TOKEN>
 ```
 
-Open the firewall for the pairing page only:
+Open the firewall for the pairing page (fronted by Caddy — the pair-manager port itself is never published to the host):
 
 ```bash
-sudo ufw allow 8377/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 ```
 
 ## Using the pairing page
@@ -102,7 +116,8 @@ To change the Liquid Auth signaling server, set `AC2_LIQUID_AUTH_SERVER` in `.en
 | Path | Purpose |
 | --- | --- |
 | `Dockerfile` | Official OpenClaw image + toolchain + AC2 plugin baked in (native rebuilds included) |
-| `docker-compose.yml` | Hardened two-service stack, single public port |
+| `docker-compose.yml` | Hardened three-service stack (gateway, pair-manager, caddy), single public surface (80/443) |
+| `Caddyfile` | TLS-terminating reverse proxy config (self-signed cert via `tls internal`) fronting the pair page |
 | `pair-manager/server.js` | Dependency-free Node HTTP service managing `ac2 pair`/`forget`, TTL, token auth |
 | `pair-manager/index.html` | QR page (client-side QR render, live polling, countdown) |
 | `pair-manager/entry.sh` | Starts DBus + gnome-keyring, then the pair-manager |

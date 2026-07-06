@@ -3,10 +3,14 @@
 # Services:
 #   openclaw-gateway — the OpenClaw gateway (NOT published publicly; loopback only)
 #   pair-manager     — token-protected QR page driving `openclaw ac2 pair`
-#                      (shares the gateway's network namespace, so ports are
-#                      published on the gateway service)
+#                      (shares the gateway's network namespace; reachable
+#                      internally at openclaw-gateway:8377, not published to
+#                      the host)
+#   caddy            — TLS-terminating reverse proxy (self-signed cert),
+#                      fronted by Cloudflare in "Full" SSL mode
 #
-# Public surface: ONLY ${PAIR_PUBLIC_PORT}->8377 (pair page, token-protected).
+# Public surface: ONLY 80/443 (caddy). The pair page itself stays
+# token-protected behind that.
 
 services:
   openclaw-gateway:
@@ -24,9 +28,11 @@ services:
       AC2_LIQUID_AUTH_SERVER: ${AC2_LIQUID_AUTH_SERVER:-}
     volumes:
       - openclaw_data:/home/node/.openclaw
+    expose:
+      # Pair page (served by pair-manager in this netns) — reached via caddy,
+      # not published to the host.
+      - "8377"
     ports:
-      # Pair page (served by pair-manager in this netns) — the ONLY public port.
-      - "${PAIR_PUBLIC_PORT:-8377}:8377"
       # Gateway/Control UI: host loopback only. Reach it via SSH tunnel.
       - "127.0.0.1:18789:18789"
     tmpfs:
@@ -54,8 +60,8 @@ services:
       openclaw-gateway:
         condition: service_healthy
     # Share the gateway's network namespace: `openclaw ac2 pair` can reach the
-    # gateway on 127.0.0.1, and the pair page rides on the gateway's published
-    # port mapping (8377).
+    # gateway on 127.0.0.1, and the pair page is reachable by other containers
+    # at openclaw-gateway:8377 (caddy proxies to it; not published to the host).
     network_mode: "service:openclaw-gateway"
     environment:
       HOME: /home/node
@@ -84,8 +90,38 @@ services:
     mem_limit: 1g
     cpus: "1.0"
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      pair-manager:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?set in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # --- hardening ---
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: "0.5"
+
 volumes:
   # Named volume: initialized on first run from the image's /home/node/.openclaw,
   # which already contains the installed AC2 plugin (with rebuilt native addons)
   # and the plugin/channel wiring in openclaw.json.
   openclaw_data:
+  # Persists Caddy's self-signed cert/key and internal CA so they survive
+  # container restarts/rebuilds.
+  caddy_data:
+  caddy_config:
