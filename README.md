@@ -60,10 +60,11 @@ chmod +x scripts/setup.sh pair-manager/entry.sh
 
 Edit `.env` and set at minimum:
 
-| Variable | Description |
-|---|---|
-| `DOMAIN` | Your Cloudflare-proxied hostname (e.g. `pair.example.com`) |
-| `GOOGLE_API_KEY` | Google AI (Gemini) API key — get one at [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| Variable | Required | Description |
+|---|---|---|
+| `DOMAIN` | optional | Cloudflare-proxied hostname (e.g. `pair.example.com`). When set, `setup.sh` starts Caddy and serves the pair page at `https://<DOMAIN>`. When blank, Caddy is not started and the pair page is available at `http://localhost:8377` — use an SSH tunnel for remote access. |
+| `GOOGLE_API_KEY` | optional | Google AI (Gemini) API key — get one at [aistudio.google.com](https://aistudio.google.com/app/apikey). When set, onboarding runs non-interactively. Leave blank to use the interactive walkthrough. |
+| `PAIR_SHOW_LOGS` | optional | Set to `true` to show the `ac2 pair` process log tail in the pairing page UI (hidden by default). Useful when debugging locally; **leave unset on public instances** to avoid leaking agent chat output through the browser. |
 
 All other values (`OPENCLAW_GATEWAY_TOKEN`, `PAIR_TOKEN`) are generated automatically by the setup script when `.env` doesn't already contain them.
 
@@ -76,10 +77,15 @@ When `GOOGLE_API_KEY` is set the script configures OpenClaw non-interactively �
 The script builds the image, applies config, verifies the AC2 wiring (`plugins enable` + `ac2 setup`), and starts the stack. It prints the pairing URL at the end:
 
 ```
+# With DOMAIN set (public, via Caddy + Cloudflare):
 https://<DOMAIN>/?token=<PAIR_TOKEN>
+
+# Without DOMAIN (local / private):
+http://localhost:8377/?token=<PAIR_TOKEN>
+  # remote: ssh -L 8377:localhost:8377 <user>@<server>
 ```
 
-Open the firewall for the pairing page (fronted by Caddy — the pair-manager port itself is never published to the host):
+If `DOMAIN` is set, open the firewall for Caddy (the pair-manager port itself is never published to the host):
 
 ```bash
 sudo ufw allow 80/tcp
@@ -115,7 +121,7 @@ To change the Liquid Auth signaling server, set `AC2_LIQUID_AUTH_SERVER` in `.en
 
 **Build OOM (exit 137):** the node-datachannel source build needs ~2 GB RAM. Add swap or use a bigger instance.
 
-**QR never appears:** check `docker compose logs pair-manager` and the page's Debug log. Common causes: onboarding not completed (no model provider configured), or the Liquid Auth server unreachable (egress blocked — the container needs outbound 443).
+**QR never appears:** check `docker compose logs pair-manager`. If you have `PAIR_SHOW_LOGS=true` set, the page's Debug log section also shows the raw process output. Common causes: onboarding not completed (no model provider configured), or the Liquid Auth server unreachable (egress blocked — the container needs outbound 443).
 
 **Keystore warnings / identity not persisted:** the plugin stores the agent's wallet-issued key via the OS keychain (`@napi-rs/keyring`). The pair-manager entrypoint starts DBus + gnome-keyring inside the container; if that fails the plugin degrades gracefully — pairing still works, but the wallet re-issues the agent identity on each new pairing instead of reusing it.
 
