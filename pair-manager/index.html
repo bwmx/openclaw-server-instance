@@ -25,19 +25,17 @@
   .error { color: #dc2626; white-space: pre-wrap; }
   details { text-align: left; margin-top: 1.5rem; font-size: .8rem; }
   pre { overflow-x: auto; background: #8881; padding: .5rem; border-radius: 6px; }
-  .payload { word-break: break-all; font-size: .7rem; opacity: .6; margin-top: .75rem; }
 </style>
 </head>
 <body>
   <h1>AC2 Pairing</h1>
   <div id="qr"></div>
-  <div class="payload" id="payload"></div>
   <div class="status" id="status">Loading…</div>
   <div>
     <button class="primary" id="startBtn">Start pairing session</button>
     <button id="forgetBtn">Forget pairing</button>
   </div>
-  <details>
+  <details id="debugLog" hidden>
     <summary>Debug log</summary>
     <pre id="log"></pre>
   </details>
@@ -63,9 +61,6 @@
       qrWidget = new QRCode($('qr'), {
         text: payload, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.M,
       });
-      $('payload').textContent = payload;
-    } else {
-      $('payload').textContent = '';
     }
   }
 
@@ -104,7 +99,9 @@
         break;
       case 'error':
         renderQr(null);
-        st.innerHTML = '<span class="error">Error: ' + (current.lastError || 'unknown') + '</span>';
+        st.innerHTML = '<span class="error">' + (current.lastError
+          ? 'Error: ' + current.lastError
+          : 'Pairing failed. Check server logs for details.') + '</span>';
         break;
     }
   }
@@ -112,10 +109,15 @@
   let drift = 0;
   async function poll() {
     try {
-      const s = await api('/api/session?logs=1');
+      const s = await api('/api/session');
       current = s;
       drift = Date.now() - s.now; // client/server clock drift
-      if (s.logTail) $('log').textContent = s.logTail.join('\n');
+      if (s.logTail) {
+        $('log').textContent = s.logTail.join('\n');
+        $('debugLog').hidden = false;
+      } else {
+        $('debugLog').hidden = true;
+      }
       paint();
     } catch (e) {
       $('status').innerHTML = '<span class="error">Cannot reach pair-manager (' + e + ')</span>';

@@ -17,6 +17,7 @@
  *   PAIR_BIND             listen address                  (default 0.0.0.0)
  *   PAIR_SESSION_TTL_MS   session lifetime                (default 900000 = 15 min)
  *   OPENCLAW_ENTRY        openclaw entry point            (default /app/dist/index.js)
+ *   PAIR_SHOW_LOGS        expose child process log tail   (default false)
  */
 
 'use strict';
@@ -32,6 +33,7 @@ const PAIR_PORT = Number(process.env.PAIR_PORT || 8377);
 const PAIR_BIND = process.env.PAIR_BIND || '0.0.0.0';
 const SESSION_TTL_MS = Number(process.env.PAIR_SESSION_TTL_MS || 15 * 60 * 1000);
 const OPENCLAW_ENTRY = process.env.OPENCLAW_ENTRY || '/app/dist/index.js';
+const PAIR_SHOW_LOGS = process.env.PAIR_SHOW_LOGS === 'true';
 const LOG_TAIL_MAX = 200;
 
 if (!PAIR_TOKEN) {
@@ -251,8 +253,8 @@ const server = http.createServer(async (req, res) => {
         expiresAt: session.expiresAt,
         now: Date.now(),
         ttlMs: SESSION_TTL_MS,
-        lastError: session.lastError,
-        logTail: url.searchParams.get('logs') === '1' ? session.logTail : undefined,
+        lastError: PAIR_SHOW_LOGS ? session.lastError : undefined,
+        logTail: PAIR_SHOW_LOGS ? session.logTail : undefined,
       });
     }
 
