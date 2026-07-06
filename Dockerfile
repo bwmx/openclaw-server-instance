@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 USER node
 ENV HOME=/home/node
 
-ARG AC2_PLUGIN_SPEC=npm:@algorandfoundation/ac2-open-claw-reference@1.0.0-canary.3
+ARG AC2_PLUGIN_SPEC=npm:@algorandfoundation/ac2-open-claw-reference@1.0.0-canary.4
 
 # 1) Install the plugin (npm install --ignore-scripts under the hood).
 RUN node /app/dist/index.js plugins install "${AC2_PLUGIN_SPEC}"
