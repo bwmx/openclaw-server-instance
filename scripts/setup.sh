@@ -60,22 +60,10 @@ if [[ "$ONBOARDED" != "yes" ]]; then
     dist/index.js config unset plugins.allow || true
 
   if [[ -n "${GOOGLE_API_KEY:-}" ]]; then
-    echo "==> Auto-configuring OpenClaw with Google API key (non-interactive)"
-    # Set static gateway config.
-    docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
-      dist/index.js config set --batch-json '[
-        {"path":"gateway.mode","value":"local"},
-        {"path":"gateway.bind","value":"lan"}
-      ]'
-    # Set the Google API key: pass via env so it is JSON-encoded safely and
-    # never interpolated raw into shell.
-    docker compose run --rm --no-deps \
-      -e GOOGLE_API_KEY="${GOOGLE_API_KEY}" \
-      --entrypoint node openclaw-gateway \
-      -e "const cp=require('child_process');
-          cp.execFileSync('node',['/app/dist/index.js','config','set','--batch-json',
-            JSON.stringify([{path:'providers.google.apiKey',value:process.env.GOOGLE_API_KEY}])
-          ],{stdio:'inherit'})"
+    echo "==> Auto-configuring OpenClaw (non-interactive; provider config applied below)"
+    # First-run only needs the plugins.allow clear already done above;
+    # the actual provider key/model are written unconditionally in step 3b.
+    :
   else
     echo "==> Running OpenClaw onboarding (interactive)"
     docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
@@ -95,6 +83,21 @@ docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
     {"path":"gateway.mode","value":"local"},
     {"path":"gateway.bind","value":"lan"}
   ]'
+
+# --- 3b. Google provider config (always applied; idempotent) ----------------
+# Runs on every setup.sh invocation so changes to GOOGLE_API_KEY or
+# GOOGLE_MODEL in .env are picked up without resetting the .onboarded marker.
+if [[ -n "${GOOGLE_API_KEY:-}" ]]; then
+  echo "==> Applying Google provider config"
+  docker compose run --rm --no-deps \
+    -e GOOGLE_API_KEY="${GOOGLE_API_KEY}" \
+    -e GOOGLE_MODEL="${GOOGLE_MODEL:-}" \
+    --entrypoint node openclaw-gateway \
+    -e "const cp=require('child_process');
+        const cfg=[{path:'providers.google.apiKey',value:process.env.GOOGLE_API_KEY}];
+        if(process.env.GOOGLE_MODEL) cfg.push({path:'providers.google.model',value:process.env.GOOGLE_MODEL});
+        cp.execFileSync('node',['/app/dist/index.js','config','set','--batch-json',JSON.stringify(cfg)],{stdio:'inherit'})"
+fi
 
 echo "==> Verifying AC2 plugin wiring"
 docker compose run --rm --no-deps --entrypoint node openclaw-gateway \
